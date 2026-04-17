@@ -18,17 +18,17 @@ jobs:
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
-          distribution: "temurin"
-          java-version: "17"
+          distribution: temurin
+          java-version: 17
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-      
+
       - name: Read version
-              id: version
+        id: version
         run: |
-          VERSION=$(cat VERSION)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          VERSION=$(tr -d '\n\r' < VERSION)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Grant execute permission for Gradle
         run: chmod +x android/gradlew
@@ -42,3 +42,4 @@ jobs:
         with:
           name: zerok-container-${{ steps.version.outputs.version }}-apk
           path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

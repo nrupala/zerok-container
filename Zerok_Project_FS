@@ -1,24 +1,69 @@
 zerok-container/
+├── VERSION
 ├── README.md
 ├── LICENSE
 ├── SECURITY.md
-├── zerok/
+├── _config.yml                 # GitHub Pages + Mermaid
+│
+├── docs/                        # GitHub Pages content
+│   ├── index.md
+│   ├── architecture.md
+│   ├── threat-model.md
+│   ├── product-contract.md
+│   ├── failure-model.md
+│   └── lifecycle.md
+│
+├── zerok/                       # Core (root of trust)
 │   ├── __init__.py
-│   ├── crypto.py
-│   ├── keys.py
-│   ├── blob.py
-│   ├── client.py
-│   └── core.py
-├── gui/
+│   ├── core.py                  # ONLY public API
+│   ├── crypto.py                # internal
+│   ├── keys.py                  # internal
+│   ├── blob.py                  # internal
+│   └── client.py                # internal
+│
+├── gui/                         # Desktop GUI (local, no frameworks)
 │   └── app.py
-├── server/
+│
+├── server/                      # Untrusted storage server
 │   └── app.py
-├── docs/
-│   ├── philosophy.md
-│   ├── how-it-works.md
-│   └── quickstart.md
-└── config/
-    └── defaults.toml
+│
+├── android/                     # Android app (native build)
+│   ├── gradlew
+│   ├── gradlew.bat
+│   ├── build.gradle
+│   ├── settings.gradle
+│   ├── gradle/
+│   │   └── wrapper/
+│   │       ├── gradle-wrapper.jar
+│   │       └── gradle-wrapper.properties
+│   │
+│   └── app/
+│       ├── build.gradle
+│       ├── src/
+│       │   ├── main/
+│       │   │   ├── AndroidManifest.xml
+│       │   │   ├── java/
+│       │   │   │   └── io/
+│       │   │   │       └── zerok/
+│       │   │   │           └── container/
+│       │   │   │               └── MainActivity.java
+│       │   │   └── res/
+│       │   │       ├── layout/
+│       │   │       │   └── activity_main.xml
+│       │   │       └── values/
+│       │   │           └── strings.xml
+│       │   └── test/
+│       └── proguard-rules.pro
+│
+├── tests/
+│   ├── test_invariants.py
+│   └── test_blob_integrity.py
+│
+└── .github/
+    └── workflows/
+        └── main.yml              # Android APK build
+ 
+ 
     
 Above is authoritative, structure of final snapshot of everything that belongs in the project folder, exactly as it stands after all constraints set for a
 Zero-Trust, Zero-Knowledge, Encrypted, Container are set:

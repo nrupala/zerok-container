@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "vault_id": "uuid",
+  "files": {
+    "blob_id": {
+      "filename": "example.pdf",
+      "size": 123456,
+      "added_at": "2026-04-16T20:00:00Z",
+      "status": "stored"
+    }
+  }
+}

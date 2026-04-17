@@ -1,0 +1,32 @@
+zerok-container/
+├── README.md
+├── LICENSE
+├── SECURITY.md
+├── zerok/
+│   ├── __init__.py
+│   ├── crypto.py
+│   ├── keys.py
+│   ├── blob.py
+│   ├── client.py
+│   └── core.py
+├── gui/
+│   └── app.py
+├── server/
+│   └── app.py
+├── docs/
+│   ├── philosophy.md
+│   ├── how-it-works.md
+│   └── quickstart.md
+└── config/
+    └── defaults.toml
+    
+Above is authoritative, structure of final snapshot of everything that belongs in the project folder, exactly as it stands after all constraints set for a
+Zero-Trust, Zero-Knowledge, Encrypted, Container are set:
+
+✅ zero‑trust
+✅ zero‑knowledge
+✅ zero external GUI frameworks
+✅ localized, auditable GUI
+✅ early‑adoption ready
+✅ beginner‑friendly
+✅ commercially credible

@@ -1,0 +1,4 @@
+encryption = "XChaCha20-Poly1305"
+kdf = "Argon2id"
+chunk_size = "4MB"
+verify_integrity = true

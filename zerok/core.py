@@ -13,13 +13,3 @@ def init_client(endpoint: str, password: str) -> ZeroKClient:
     if not isinstance(password, str) or len(password) < 8:
         raise ValueError("Password must be at least 8 characters")
     return ZeroKClient(endpoint, password)
-``"""
-High-level core interface.
-
-This module exists so GUIs and CLIs never touch crypto directly.
-"""
-
-from .client import ZeroKClient
-
-def init_client(endpoint: str, password: str) -> ZeroKClient:
-    return ZeroKClient(endpoint, password)

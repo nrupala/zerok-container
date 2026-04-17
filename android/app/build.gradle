@@ -2,6 +2,11 @@ plugins {
     id "com.android.application"
 }
 
+repositories {
+    google()
+    mavenCentral()
+}
+
 android {
     namespace "io.zerok.container"
     compileSdk 34
@@ -11,7 +16,7 @@ android {
         minSdk 26
         targetSdk 34
         versionCode 1
-        versionName file("../../VERSION").text.trim()
+        versionName rootProject.file("../VERSION").text.trim()
     }
 
     buildTypes {

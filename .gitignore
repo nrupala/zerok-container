@@ -1,0 +1,5 @@
+# Ignore Gradle distributions
+android/gradle-8.2/
+android/gradle-new.zip
+android/gradle-8.2-bin.zip
+android/gradle.zip

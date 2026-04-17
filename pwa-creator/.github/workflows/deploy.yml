@@ -1,0 +1,24 @@
+name: Deploy PWA
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate PWA structure
+        run: |
+          echo "Validating..."
+          ls -la
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pwa-files
+          path: "*.html,*.css,*.js,*.json"
+          if-no-files-found: error

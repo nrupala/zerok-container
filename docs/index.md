@@ -21,7 +21,7 @@ Zerok Container is a:
 - System with no external GUI frameworks
 
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](
-https://nrupala.github.io/zerok-container/)
+https://github.com/nrupala/zerok-container/)
 
 ---
 

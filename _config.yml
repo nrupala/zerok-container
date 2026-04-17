@@ -4,3 +4,10 @@ kramdown:
 
 plugins:
   - jekyll-mermaid
+
+include:
+  - pwa
+
+collections:
+  pwa:
+    output: true

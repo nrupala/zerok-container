@@ -1,0 +1,66 @@
+name: Android APK Build
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(cat VERSION)
+          VERSION=$(echo $VERSION | tr -d '\n\r' | xargs)
+          if [ -z "$VERSION" ]; then
+            VERSION="0.0.0"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download Gradle
+        run: |
+          cd android
+          curl -L -o gradle.zip https://services.gradle.org/distributions/gradle-8.2-bin.zip
+          unzip -q gradle.zip
+          rm gradle.zip
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x gradle-8.2/bin/gradle
+          gradle-8.2/bin/gradle assembleDebug --no-daemon
+
+      - name: Set APK version
+        if: success()
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
+          if [ -f "$APK_PATH" ]; then
+            mv "$APK_PATH" "android/app/build/outputs/apk/debug/app-$VERSION.apk"
+          fi
+
+      - name: Upload APK artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-${{ steps.version.outputs.version }}-apk
+          path: android/app/build/outputs/apk/debug/app-*.apk
+          if-no-files-found: error

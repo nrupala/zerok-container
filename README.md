@@ -1,6 +1,7 @@
+
+# Zerok Container
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](
 https://nrupala.github.io/zerok-container/)
-# Zerok Container
 
 Zerok is a zero-trust, zero-knowledge encrypted container for files and blobs.
 

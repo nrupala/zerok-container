@@ -4,68 +4,86 @@ Welcome to the Zerok documentation.
 
 ## Contents
 - Overview
-- What is a Vault
 - Architecture
+- What is a Vault
 - Vault Lifecycle
 - Local Files
 - Failure Scenarios
 - Guarantees
 
-Zerok container is
+## Overview
+
+Zerok Container is a:
+
 - Zero‑knowledge, zero‑trust vault
-- Local encryption
-- Untrusted storage
-- No external GUI frameworks
+- Local‑first encryption system
+- Untrusted remote storage design
+- System with no external GUI frameworks
+
+---
 
 ## Architecture
 
 ### Vault Lifecycle
-```mermaid
-flowchart TD
-    U[User] -->|Launch app| A[GUI]
-    A --> B{Vault exists?}
 
-    B -- No --> C[First-run setup]
-    C --> D[User sets password]
-    D --> E[Key derived locally]
-    E --> F[Vault metadata created]
+    ```mermaid 
+        flowchart TD
+        U[User] -->|Launch app| A[GUI]
+        A --> B{Vault exists?}
 
-    B -- Yes --> G[Vault unlocked]
+        B -- No --> C[First-run setup]
+        C --> D[User sets password]
+        D --> E[Key derived locally]
+        E --> F[Vault metadata created]
 
-    F --> H[Vault ready]
-    G --> H
+        B -- Yes --> G[Vault unlocked]
 
-    H --> I[Add file]
-    I --> J[Encrypt locally]
-    J --> K[Update local index]
-    K --> L[Upload encrypted blob]
-    L --> M[Untrusted server]
-    
-## What is a Vault?
+        F --> H[Vault ready]
+        G --> H
 
+        H --> I[Add file]
+        I --> J[Encrypt locally]
+        J --> K[Update local index]
+        K --> L[Upload encrypted blob]
+        L --> M[Untrusted server]
+
+
+What is a Vault?
 A Zerok vault is a local, encrypted container that:
 
-- Lives on your machine
-- Encrypts files before they leave your device
-- Keeps a local index of your files
-- Uses an untrusted server only for storage
+Lives on your machine
+Encrypts files before they leave your device
+Maintains a local index of file metadata
+Uses an untrusted server only for encrypted storage
 
-The server never sees file names, contents, or keys.
+The server never sees:
 
-## Local Files Created by Zerok
+File contents
+File names
+Encryption keys
 
-Zerok creates the following local files:
 
-- `vault_meta.json` – vault identity and parameters
-- `vault_index.json` – list of your files (names, dates, sizes)
-- `safety_ack.json` – confirmation you accepted irreversible risks
+Local Files Created by Zerok
+Zerok creates the following files locally:
 
-Encrypted data is never stored in plaintext on disk.
+vault_meta.json — vault identity and cryptographic parameters
+vault_index.json — list of files (names, sizes, timestamps)
+safety_ack.json — record that irreversible risks were acknowledged
 
-## Failure Scenarios (Plain Language)
+Encrypted file contents are never stored in plaintext on disk.
 
-- If you forget your password → data is permanently unrecoverable
-- If the server deletes data → data is lost
-- If the network is down → your local data remains safe
-- If the app closes unexpectedly → no plaintext is left behind
+Failure Scenarios (Plain Language)
 
+If you forget your password → data is permanently unrecoverable
+If the server deletes data → data is permanently lost
+If the network is down → your local data remains safe
+If the app closes unexpectedly → no plaintext is left behind
+
+
+Guarantees
+Zerok guarantees that:
+
+Encryption always happens locally
+Keys never leave the device
+Storage servers are fully untrusted
+Previously created encrypted blobs remain decryptable

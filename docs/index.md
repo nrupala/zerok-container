@@ -14,6 +14,10 @@ Welcome to the Zerok documentation.
 ## Overview
 
 Zerok Container is a:
+GitHub Repo Link: 
+[![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](
+https://nrupala.github.io/zerok-container/)
+
 
 - Zero‑knowledge, zero‑trust vault
 - Local‑first encryption system

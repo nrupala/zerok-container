@@ -48,7 +48,7 @@ Zerok Container is a:
         L --> M[Untrusted server]
       ``
 
-What is a Vault?
+## What is a Vault?
 A Zerok vault is a local, encrypted container that:
 
 Lives on your machine
@@ -56,14 +56,14 @@ Encrypts files before they leave your device
 Maintains a local index of file metadata
 Uses an untrusted server only for encrypted storage
 
-The server never sees:
+## The server never sees:
 
 File contents
 File names
 Encryption keys
 
 
-Local Files Created by Zerok
+## Local Files Created by Zerok
 Zerok creates the following files locally:
 
 vault_meta.json — vault identity and cryptographic parameters
@@ -72,7 +72,7 @@ safety_ack.json — record that irreversible risks were acknowledged
 
 Encrypted file contents are never stored in plaintext on disk.
 
-Failure Scenarios (Plain Language)
+## Failure Scenarios (Plain Language)
 
 If you forget your password → data is permanently unrecoverable
 If the server deletes data → data is permanently lost
@@ -80,7 +80,7 @@ If the network is down → your local data remains safe
 If the app closes unexpectedly → no plaintext is left behind
 
 
-Guarantees
+## Guarantees
 Zerok guarantees that:
 
 Encryption always happens locally

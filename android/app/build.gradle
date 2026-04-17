@@ -1,3 +1,28 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "io.zerok.container"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "io.zerok.container"
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName "0.1.0"
+    }
+
+    buildTypes {
+        debug {
+            debuggable true
+        }
+    }
+}
+
+dependencies {
+}
 android {
     defaultConfig {
         applicationId "io.zerok.container"

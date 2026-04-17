@@ -21,8 +21,11 @@ jobs:
           distribution: "temurin"
           java-version: "17"
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      
       - name: Read version
-        id: version
+              id: version
         run: |
           VERSION=$(cat VERSION)
           echo "version=$VERSION" >> $GITHUB_OUTPUT

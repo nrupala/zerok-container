@@ -40,8 +40,8 @@ flowchart TD
     J --> K[Update local index]
     K --> L[Upload encrypted blob]
     L --> M[Untrusted server]
-        
-    ## What is a Vault?
+    
+## What is a Vault?
 
 A Zerok vault is a local, encrypted container that:
 

@@ -1,8 +1,8 @@
-import blake3
-from .crypto import encrypt, decrypt
+import hashlib
+from .crpyto import encrypt, decrypt
 
 def blob_id(ciphertext: bytes) -> str:
-    return blake3.blake3(ciphertext).hexdigest()
+    return hashlib.sha256(ciphertext).hexdigest()
 
 def encrypt_blob(key: bytes, data: bytes):
     encrypted = encrypt(key, data)

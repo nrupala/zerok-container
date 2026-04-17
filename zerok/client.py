@@ -1,6 +1,7 @@
 import requests
-from .keys import derive_key, new_salt
+from .crpyto import encrypt, decrypt
 from .blob import encrypt_blob, decrypt_blob
+from .keys import derive_key, new_salt
 
 class ZeroKClient:
     def __init__(self, endpoint: str, password: str):

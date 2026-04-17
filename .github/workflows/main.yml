@@ -1,4 +1,4 @@
-name: Android APK Build
+name: Build APK and PWA
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-android:
+  build-apk:
     runs-on: ubuntu-latest
 
     steps:
@@ -34,7 +34,6 @@ jobs:
             VERSION="0.0.0"
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Version read: $VERSION"
 
       - name: Download Gradle
         run: |
@@ -55,21 +54,31 @@ jobs:
           VERSION=${{ steps.version.outputs.version }}
           APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
           if [ -f "$APK_PATH" ]; then
-            mv "$APK_PATH" "android/app/build/outputs/apk/debug/zerok-container-$VERSION.apk"
+            mv "$APK_PATH" "android/app/build/outputs/apk/debug/zerok-$VERSION.apk"
           fi
 
       - name: Upload APK artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: zerok-container-${{ steps.version.outputs.version }}-apk
-          path: android/app/build/outputs/apk/debug/zerok-container-*.apk
+          name: zerok-apk-${{ steps.version.outputs.version }}
+          path: android/app/build/outputs/apk/debug/zerok-*.apk
           if-no-files-found: error
 
-      - name: Upload Gradle logs on failure
-        if: failure()
+  build-pwa:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate PWA
+        run: |
+          echo "Validating PWA files..."
+          ls -la pwa/
+
+      - name: Upload PWA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gradle-logs
-          path: android/app/build/outputs/logs/
-          if-no-files-found: ignore
+          name: zerok-pwa
+          path: pwa/
+          if-no-files-found: error

@@ -287,13 +287,27 @@
       const app = document.getElementById('app');
       if (!app) return;
 
-      const hasVault = await this.storage.listVaults();
+      const vaults = await this.storage.listVaults();
       
-      if (!hasVault.length) {
+      if (!vaults.length) {
         app.innerHTML = this.renderWelcome();
       } else {
         app.innerHTML = this.renderLogin();
+        await this.populateVaultSelect(vaults);
       }
+    }
+
+    async populateVaultSelect(vaults) {
+      const select = document.getElementById('vault-select');
+      if (!select) return;
+      
+      select.innerHTML = '<option value="">Choose vault...</option>';
+      vaults.forEach(vault => {
+        const option = document.createElement('option');
+        option.value = vault.id;
+        option.textContent = vault.username;
+        select.appendChild(option);
+      });
     }
 
     renderWelcome() {
@@ -336,12 +350,18 @@
           </div>
           
           <div class="form-group">
+            <label for="vault-username">Or enter username</label>
+            <input type="text" id="vault-username" placeholder="Vault username" autocomplete="off">
+          </div>
+          
+          <div class="form-group">
             <label for="password">Password</label>
             <input type="password" id="password" placeholder="Enter password" minlength="12">
           </div>
           
           <button id="unlock-vault" class="btn-primary">Unlock</button>
           <button id="delete-vault" class="btn-danger">Delete Vault</button>
+          <button id="new-vault" class="btn-secondary">Create New Vault</button>
           <p class="error" id="error"></p>
         </section>
       `;
@@ -483,6 +503,11 @@
         if (e.target.id === 'delete-vault') {
           await this.deleteVault();
         }
+        if (e.target.id === 'new-vault') {
+          const app = document.getElementById('app');
+          app.innerHTML = this.renderWelcome();
+          this.bindEvents();
+        }
         if (e.target.classList.contains('view-btn')) {
           this.viewMode = e.target.dataset.view;
           this.updateView();
@@ -564,12 +589,26 @@
     }
 
     async unlockVault() {
-      const vaultId = document.getElementById('vault-select')?.value;
+      let vaultId = document.getElementById('vault-select')?.value;
+      const usernameInput = document.getElementById('vault-username')?.value;
       const password = document.getElementById('password')?.value;
       const error = document.getElementById('error');
 
-      if (!vaultId || !password) {
-        error.textContent = 'Select vault and enter password';
+      if (!password) {
+        error.textContent = 'Enter password';
+        return;
+      }
+
+      if (!vaultId && usernameInput) {
+        const vaults = await this.storage.listVaults();
+        const vaultByName = vaults.find(v => v.username.toLowerCase() === usernameInput.toLowerCase());
+        if (vaultByName) {
+          vaultId = vaultByName.id;
+        }
+      }
+
+      if (!vaultId) {
+        error.textContent = 'Select vault or enter username';
         return;
       }
 
@@ -604,7 +643,17 @@
     }
 
     async deleteVault() {
-      const vaultId = document.getElementById('vault-select')?.value;
+      let vaultId = document.getElementById('vault-select')?.value;
+      const usernameInput = document.getElementById('vault-username')?.value;
+
+      if (!vaultId && usernameInput) {
+        const vaults = await this.storage.listVaults();
+        const vaultByName = vaults.find(v => v.username.toLowerCase() === usernameInput.toLowerCase());
+        if (vaultByName) {
+          vaultId = vaultByName.id;
+        }
+      }
+
       if (!vaultId || !confirm('Delete this vault? All files will be lost forever.')) return;
 
       await this.storage.deleteVault(vaultId);

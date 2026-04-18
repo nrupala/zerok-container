@@ -154,6 +154,17 @@ button {
   color: white;
 }
 
+.btn-secondary {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
 .btn-small {
   padding: 8px 16px;
   font-size: 13px;

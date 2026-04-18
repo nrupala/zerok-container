@@ -23,8 +23,8 @@
     KEY_BITS: 256,
     DB_NAME: 'zerok-vault',
     OPFS_NAME: 'zerok-opfs',
-    MAX_VAULT_SIZE: 5 * 1024 * 1024 * 1024, // 5GB
-    SCHEMA_VERSION: 3 // Increment when schema changes
+    MAX_VAULT_SIZE: 50 * 1024 * 1024 * 1024, // 50GB default, can be changed in settings
+    SCHEMA_VERSION: 3
   };
 
   const MIGRATIONS = {
@@ -506,6 +506,7 @@
       this.storage = new FortKnoxStorage();
       this.crypto = new CryptoEngine();
       this.currentVault = null;
+      this.currentPage = 'vault';
       this.viewMode = 'grid';
       this.files = [];
       this.folders = [];
@@ -651,6 +652,11 @@
           <header class="vault-header">
             <div class="header-left">
               <h1>🛡️ Zerok Vault</h1>
+              <nav class="page-nav">
+                <button class="page-btn ${this.currentPage === 'vault' ? 'active' : ''}" data-page="vault">📁 Files</button>
+                <button class="page-btn ${this.currentPage === 'analytics' ? 'active' : ''}" data-page="analytics">📊 Analytics</button>
+                <button class="page-btn ${this.currentPage === 'help' ? 'active' : ''}" data-page="help">❓ Help</button>
+              </nav>
             </div>
             <div class="header-right">
               <span class="vault-badge">🔐 ${this.currentVault.username}</span>
@@ -767,16 +773,14 @@
               </div>
               
               <div id="file-list" class="file-list view-${this.viewMode}">
-                ${this.viewMode === 'analytics' ? this.renderAnalytics() : this.renderFiles(filteredFiles)}
+                ${this.renderPageContent()}
               </div>
             </main>
           </div>
           
           <footer class="vault-footer">
             <div class="footer-left">
-              <span id="file-count">${filteredFiles.length} files</span>
-              <span class="separator">|</span>
-              <span id="storage-usage">${storageInfo.used} used of ${storageInfo.max}</span>
+              ${this.currentPage === 'vault' ? `<span id="file-count">${filteredFiles.length} files</span><span class="separator">|</span><span id="storage-usage">${storageInfo.used} used of ${storageInfo.max}</span>` : ''}
             </div>
             <div class="footer-right">
               <span class="vault-status">🟢 Vault unlocked</span>
@@ -795,6 +799,87 @@
         max: this.formatSize(max),
         percent: percent.toFixed(1)
       };
+    }
+
+    renderPageContent() {
+      switch (this.currentPage) {
+        case 'vault':
+          return this.renderFiles(this.getFilteredFiles());
+        case 'analytics':
+          return this.renderAnalytics();
+        case 'help':
+          return this.renderHelp();
+        default:
+          return this.renderFiles(this.getFilteredFiles());
+      }
+    }
+
+    renderHelp() {
+      return `
+        <div class="help-panel">
+          <div class="help-section">
+            <h2>❓ Help & About</h2>
+            <p class="help-subtitle">Zerok Vault - Zero-knowledge encrypted storage</p>
+          </div>
+          
+          <div class="help-section">
+            <h3>🔐 Security</h3>
+            <ul>
+              <li><strong>AES-256-GCM</strong> - Military-grade encryption for all your files</li>
+              <li><strong>PBKDF2 (600K iterations)</strong> - Strong key derivation</li>
+              <li><strong>Zero Knowledge</strong> - Your password never leaves your device</li>
+              <li><strong>Local Storage</strong> - All data stored locally in your browser</li>
+            </ul>
+          </div>
+          
+          <div class="help-section">
+            <h3>📁 Managing Files</h3>
+            <ul>
+              <li><strong>Upload:</strong> Click "Add Files" or drag & drop files into the vault</li>
+              <li><strong>Download:</strong> Click any file to decrypt and download</li>
+              <li><strong>Organize:</strong> Create folders to organize your files</li>
+              <li><strong>Albums:</strong> Create albums to group related photos</li>
+              <li><strong>Delete:</strong> Files go to trash - can be restored or permanently deleted</li>
+            </ul>
+          </div>
+          
+          <div class="help-section">
+            <h3>🔍 Search & Filter</h3>
+            <ul>
+              <li><strong>Search:</strong> Type in search box to filter files by name</li>
+              <li><strong>Sort:</strong> Use dropdown to sort by name, date, or size</li>
+              <li><strong>Filter:</strong> Filter by file type (images, videos, audio, docs, archives)</li>
+            </ul>
+          </div>
+          
+          <div class="help-section">
+            <h3>👁️ View Modes</h3>
+            <ul>
+              <li><strong>Grid:</strong> Thumbnail view of all files</li>
+              <li><strong>List:</strong> Compact list with details</li>
+              <li><strong>Details:</strong> Expanded view with file info</li>
+              <li><strong>Gallery:</strong> Media-only view for photos/videos</li>
+            </ul>
+          </div>
+          
+          <div class="help-section">
+            <h3>⚠️ Important Notes</h3>
+            <ul>
+              <li>Your password is the ONLY way to access your files - <strong>no recovery option</strong></li>
+              <li>Files are encrypted locally - if you clear browser data, files may be lost</li>
+              <li>Maximum vault size: 5GB</li>
+              <li>Use a strong password (min 12 characters recommended)</li>
+            </ul>
+          </div>
+          
+          <div class="help-section">
+            <h3>ℹ️ About</h3>
+            <p>Zerok Vault v1.0.0</p>
+            <p>Built with Web Crypto API for secure client-side encryption.</p>
+            <p>All data stays on your device - zero cloud storage.</p>
+          </div>
+        </div>
+      `;
     }
 
     escapeHtml(text) {
@@ -1352,6 +1437,11 @@
           this.updateView();
         }
         
+        if (target.classList.contains('page-btn')) {
+          this.currentPage = target.dataset.page;
+          this.showVault();
+        }
+        
         if (target.classList.contains('type-btn')) {
           this.typeFilter = target.dataset.type;
           this.updateView();
@@ -1465,8 +1555,32 @@
       sessionStorage.setItem('zerok-password', password);
       
       this.currentVault = vault;
+      await this.createDefaultFolders();
       this.showVault();
       await this.loadVaultData();
+    }
+
+    async createDefaultFolders() {
+      const defaultFolders = [
+        { name: '🖼️ Gallery', system: 'gallery' },
+        { name: '📄 Documents', system: 'documents' },
+        { name: '🖼️ Images', system: 'images' },
+        { name: '🎬 Videos', system: 'videos' },
+        { name: '🎵 Audio', system: 'audio' },
+        { name: '📦 Archives', system: 'archives' }
+      ];
+      
+      for (const f of defaultFolders) {
+        const folder = {
+          id: crypto.randomUUID(),
+          vaultId: this.currentVault.id,
+          name: f.name,
+          system: f.system,
+          parentId: null,
+          created: Date.now()
+        };
+        await this.storage.saveFolder(folder);
+      }
     }
 
     async unlockVault() {

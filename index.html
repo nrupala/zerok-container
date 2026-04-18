@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="Zerok Vault - Zero-knowledge encrypted file vault">
+  <meta name="theme-color" content="#0a0a0f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Zerok Vault">
+  <title>Zerok Vault</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="zerok.css">
+  <link rel="icon" type="image/png" href="icon.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Zerok Vault</h1>
+      <p class="tagline">Zero-knowledge encryption</p>
+    </header>
+
+    <main id="app">
+      <div class="card">
+        <p>Loading vault...</p>
+      </div>
+    </main>
+
+    <footer>
+      <p>End-to-end encrypted • Zero knowledge</p>
+    </footer>
+  </div>
+
+  <script src="zerok-tests.js"></script>
+  <script src="zerok-vault.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js');
+    }
+    
+    window.addEventListener('load', async () => {
+      console.log('='.repeat(50));
+      console.log('Zerok Vault - Loading...');
+      console.log('='.repeat(50));
+      
+      if (window.zerokTests) {
+        await window.zerokTests.runTests();
+      }
+    });
+  </script>
+</body>
+</html>

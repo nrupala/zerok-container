@@ -448,7 +448,6 @@
       console.log('[Zerok] Initializing vault...');
       await this.storage.init();
       console.log('[Zerok] Storage ready');
-      await this.restoreSession();
       await this.render();
       this.bindEvents();
     }
@@ -467,6 +466,7 @@
               this.currentVault = vault;
               await this.loadVaultData();
               console.log('[Zerok] Session restored for', vault.username);
+              return true;
             } catch (e) {
               console.log('[Zerok] Session expired');
               sessionStorage.removeItem('zerok-password');
@@ -474,11 +474,19 @@
           }
         }
       }
+      return false;
     }
 
     async render() {
       const app = document.getElementById('app');
       if (!app) return;
+
+      const restored = await this.restoreSession();
+      if (restored && this.currentVault) {
+        app.innerHTML = this.renderVault();
+        this.bindEvents();
+        return;
+      }
 
       const vaults = await this.storage.listVaults();
       

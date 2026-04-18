@@ -1,3 +1,6 @@
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from zerok.crpyto import encrypt, decrypt
 
 def test_encrypt_decrypt_roundtrip():

@@ -2,34 +2,56 @@ package io.zerok.container;
 
 import android.app.Activity;
 import android.os.Bundle;
-import android.widget.TextView;
-import android.widget.LinearLayout;
-import android.graphics.Color;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.view.WindowManager;
 
 public class MainActivity extends Activity {
+    private WebView webView;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(50, 50, 50, 50);
-        layout.setBackgroundColor(Color.parseColor("#1a1a2e"));
+        getWindow().setFlags(
+            WindowManager.LayoutParams.FLAG_SECURE,
+            WindowManager.LayoutParams.FLAG_SECURE
+        );
         
-        TextView title = new TextView(this);
-        title.setText("Zerok Vault");
-        title.setTextSize(32);
-        title.setTextColor(Color.parseColor("#e94560"));
-        title.setPadding(0, 0, 0, 30);
+        webView = new WebView(this);
+        webView.setBackgroundColor(0xFF0A0A0F);
         
-        TextView status = new TextView(this);
-        status.setText("Zero-Knowledge Encryption\n\nYour data is encrypted before it leaves your device.");
-        status.setTextSize(16);
-        status.setTextColor(Color.parseColor("#ffffff"));
+        WebSettings settings = webView.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
+        settings.setDatabaseEnabled(true);
+        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+        settings.setAllowFileAccess(true);
+        settings.setAllowContentAccess(true);
+        settings.setLoadWithOverviewMode(true);
+        settings.setUseWideViewPort(true);
+        settings.setBuiltInZoomControls(false);
+        settings.setDisplayZoomControls(false);
         
-        layout.addView(title);
-        layout.addView(status);
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+            }
+        });
         
-        setContentView(layout);
+        webView.loadUrl("file:///android_asset/index.html");
+        
+        setContentView(webView);
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (webView != null && webView.canGoBack()) {
+            webView.goBack();
+        } else {
+            super.onBackPressed();
+        }
     }
 }

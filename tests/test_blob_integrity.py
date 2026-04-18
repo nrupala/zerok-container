@@ -1,3 +1,6 @@
+import sys
+import os
+sys.path.insert(0, 'C:/Users/HomeUser/Downloads/Zerok')
 from zerok.blob import encrypt_blob, decrypt_blob
 from zerok.crpyto import encrypt, decrypt
 

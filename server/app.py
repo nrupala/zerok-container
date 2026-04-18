@@ -14,6 +14,7 @@ def upload(blob_id):
 
 @app.route("/blob/<blob_id>", methods=["GET"])
 def download(blob_id):
+def download(blob_id):
     try:
         with open(os.path.join(DATA_DIR, blob_id), "rb") as f:
             return f.read()

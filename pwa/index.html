@@ -2,14 +2,15 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Minimal PWA - Zero-knowledge encryption">
-  <meta name="theme-color" content="#1a1a2e">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="Zerok Vault - Zero-knowledge encrypted file vault">
+  <meta name="theme-color" content="#0a0a0f">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Zerok PWA</title>
+  <meta name="apple-mobile-web-app-title" content="Zerok Vault">
+  <title>Zerok Vault</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="zerok.css">
   <link rel="icon" type="image/png" href="icon.png">
   <link rel="apple-touch-icon" href="icon-192.png">
 </head>
@@ -17,25 +18,13 @@
   <div class="container">
     <header>
       <h1>Zerok Vault</h1>
-      <p class="tagline">Zero-knowledge PWA</p>
+      <p class="tagline">Zero-knowledge encryption</p>
     </header>
 
     <main id="app">
-      <section id="auth" class="card">
-        <h2>Unlock Vault</h2>
-        <input type="password" id="password" placeholder="Password (min 8 chars)" minlength="8">
-        <button id="unlock">Unlock</button>
-        <p class="error" id="error"></p>
-      </section>
-
-      <section id="vault" class="card hidden">
-        <h2>Add Files</h2>
-        <div class="dropzone" id="dropzone">
-          <p>Drop files or click to browse</p>
-          <input type="file" id="fileinput" multiple hidden>
-        </div>
-        <ul id="filelist"></ul>
-      </section>
+      <div class="card">
+        <p>Loading vault...</p>
+      </div>
     </main>
 
     <footer>
@@ -43,11 +32,22 @@
     </footer>
   </div>
 
-  <script src="app.js"></script>
+  <script src="zerok-tests.js"></script>
+  <script src="zerok-vault.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js');
     }
+    
+    window.addEventListener('load', async () => {
+      console.log('='.repeat(50));
+      console.log('Zerok Vault - Loading...');
+      console.log('='.repeat(50));
+      
+      if (window.zerokTests) {
+        await window.zerokTests.runTests();
+      }
+    });
   </script>
 </body>
 </html>

@@ -1154,3 +1154,41 @@ footer {
   background: var(--danger);
   color: white;
 }
+
+/* Trash View */
+.trash-list {
+  padding: 20px;
+}
+
+.trash-item {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  margin-bottom: 12px;
+  gap: 16px;
+}
+
+.trash-icon {
+  font-size: 32px;
+}
+
+.trash-info {
+  flex: 1;
+}
+
+.trash-name {
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.trash-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.trash-actions {
+  display: flex;
+  gap: 8px;
+}

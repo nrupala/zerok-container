@@ -24,7 +24,7 @@
     DB_NAME: 'zerok-vault',
     OPFS_NAME: 'zerok-opfs',
     MAX_VAULT_SIZE: 5 * 1024 * 1024 * 1024, // 5GB
-    SCHEMA_VERSION: 2 // Increment when schema changes
+    SCHEMA_VERSION: 3 // Increment when schema changes
   };
 
   const MIGRATIONS = {
@@ -33,6 +33,9 @@
     },
     2: async (db) => {
       // v2: Added folders and albums stores
+    },
+    3: async (db) => {
+      // v3: Added trash store for deleted files
     }
   };
 
@@ -103,6 +106,9 @@
           }
           if (!db.objectStoreNames.contains('albums')) {
             db.createObjectStore('albums', { keyPath: 'id' });
+          }
+          if (!db.objectStoreNames.contains('trash')) {
+            db.createObjectStore('trash', { keyPath: 'id' });
           }
         };
         
@@ -322,6 +328,73 @@
         request.onerror = () => reject(request.error);
       });
     }
+
+    async moveToTrash(file) {
+      const trashItem = {
+        ...file,
+        deletedAt: Date.now()
+      };
+      return new Promise((resolve, reject) => {
+        const tx = this.idb.transaction('trash', 'readwrite');
+        const store = tx.objectStore('trash');
+        const request = store.put(trashItem);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    async listTrash(vaultId) {
+      return new Promise((resolve, reject) => {
+        const tx = this.idb.transaction('trash', 'readonly');
+        const store = tx.objectStore('trash');
+        const request = store.getAll();
+        request.onsuccess = () => {
+          const items = (request.result || []).filter(f => f.vaultId === vaultId);
+          resolve(items);
+        };
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    async restoreFromTrash(id) {
+      const tx = this.idb.transaction('trash', 'readwrite');
+      const store = tx.objectStore('trash');
+      const item = await new Promise(resolve => {
+        const req = store.get(id);
+        req.onsuccess = () => resolve(req.result);
+      });
+      if (!item) return null;
+      
+      delete item.deletedAt;
+      delete item.id;
+      
+      const fileTx = this.idb.transaction('files', 'readwrite');
+      fileTx.objectStore('files').put(item);
+      
+      const deleteTx = this.idb.transaction('trash', 'readwrite');
+      deleteTx.objectStore('trash').delete(id);
+      
+      return item;
+    }
+
+    async emptyTrash(vaultId) {
+      const items = await this.listTrash(vaultId);
+      const tx = this.idb.transaction('trash', 'readwrite');
+      const store = tx.objectStore('trash');
+      for (const item of items) {
+        store.delete(item.id);
+      }
+    }
+
+    async deleteFromTrash(id) {
+      return new Promise((resolve, reject) => {
+        const tx = this.idb.transaction('trash', 'readwrite');
+        const store = tx.objectStore('trash');
+        const request = store.delete(id);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    }
   }
 
   class CryptoEngine {
@@ -437,6 +510,7 @@
       this.files = [];
       this.folders = [];
       this.albums = [];
+      this.trashItems = [];
       this.currentFolder = null;
       this.typeFilter = 'all';
       this.searchQuery = '';
@@ -448,7 +522,6 @@
       console.log('[Zerok] Initializing vault...');
       await this.storage.init();
       console.log('[Zerok] Storage ready');
-      await this.restoreSession();
       await this.render();
       this.bindEvents();
     }
@@ -467,6 +540,7 @@
               this.currentVault = vault;
               await this.loadVaultData();
               console.log('[Zerok] Session restored for', vault.username);
+              return true;
             } catch (e) {
               console.log('[Zerok] Session expired');
               sessionStorage.removeItem('zerok-password');
@@ -474,11 +548,19 @@
           }
         }
       }
+      return false;
     }
 
     async render() {
       const app = document.getElementById('app');
       if (!app) return;
+
+      const restored = await this.restoreSession();
+      if (restored && this.currentVault) {
+        app.innerHTML = this.renderVault();
+        this.bindEvents();
+        return;
+      }
 
       const vaults = await this.storage.listVaults();
       
@@ -636,6 +718,12 @@
                     <div class="storage-fill" style="width: ${storageInfo.percent}%"></div>
                   </div>
                 </div>
+              </div>
+              
+              <div class="sidebar-section">
+                <h3>🗑️ Trash</h3>
+                <button class="sidebar-btn" id="view-trash">🗑️ Trash (${this.trashItems.length})</button>
+                ${this.trashItems.length > 0 ? '<button class="sidebar-btn" id="empty-trash">Empty Trash</button>' : ''}
               </div>
             </aside>
             
@@ -1071,10 +1159,44 @@
     }
 
     async deleteFile(id) {
-      if (!confirm('Delete this file permanently?')) return;
+      const file = this.files.find(f => f.id === id);
+      if (!file) return;
+      
+      await this.storage.moveToTrash(file);
       await this.storage.deleteFile(id);
       await this.loadVaultFiles();
+      await this.loadTrash();
+      this.showToast('File moved to trash', 'info');
       this.updateView();
+    }
+
+    async restoreFile(id) {
+      await this.storage.restoreFromTrash(id);
+      await this.loadVaultFiles();
+      await this.loadTrash();
+      this.showToast('File restored', 'success');
+      this.updateView();
+    }
+
+    async permanentDelete(id) {
+      if (!confirm('Permanently delete this file? This cannot be undone.')) return;
+      await this.storage.deleteFromTrash(id);
+      await this.loadTrash();
+      this.showToast('File permanently deleted', 'info');
+      this.updateView();
+    }
+
+    async emptyTrash() {
+      if (!confirm('Empty trash? All items will be permanently deleted.')) return;
+      await this.storage.emptyTrash(this.currentVault.id);
+      await this.loadTrash();
+      this.showToast('Trash emptied', 'info');
+      this.updateView();
+    }
+
+    async loadTrash() {
+      if (!this.currentVault) return;
+      this.trashItems = await this.storage.listTrash(this.currentVault.id);
     }
 
     async renameFile(id) {
@@ -1206,6 +1328,24 @@
         if (target.id === 'new-album') {
           await this.createAlbum();
         }
+        if (target.id === 'view-trash') {
+          this.showTrashView();
+        }
+        if (target.id === 'back-to-vault') {
+          this.showVault();
+        }
+        if (target.id === 'empty-trash') {
+          await this.emptyTrash();
+        }
+        
+        if (target.classList.contains('trash-restore')) {
+          const id = target.closest('[data-trash-id]')?.dataset.trashId;
+          if (id) await this.restoreFile(id);
+        }
+        if (target.classList.contains('trash-delete')) {
+          const id = target.closest('[data-trash-id]')?.dataset.trashId;
+          if (id) await this.permanentDelete(id);
+        }
         
         if (target.classList.contains('view-btn')) {
           this.viewMode = target.dataset.view;
@@ -1259,8 +1399,11 @@
 
       document.addEventListener('input', async (e) => {
         if (e.target.id === 'search') {
-          this.searchQuery = e.target.value;
-          this.updateView();
+          clearTimeout(this.searchTimeout);
+          this.searchTimeout = setTimeout(() => {
+            this.searchQuery = e.target.value;
+            this.updateView();
+          }, 300);
         }
         if (e.target.id === 'sort-select') {
           this.sortBy = e.target.value;
@@ -1489,10 +1632,54 @@
       }
     }
 
+    showTrashView() {
+      const app = document.getElementById('app');
+      if (!app) return;
+      
+      app.innerHTML = this.renderTrash();
+      this.bindEvents();
+    }
+
+    renderTrash() {
+      return `
+        <div class="vault-container">
+          <header class="vault-header">
+            <div class="header-left">
+              <button class="btn-secondary" id="back-to-vault">← Back to Vault</button>
+              <h1>🗑️ Trash</h1>
+            </div>
+            <div class="header-right">
+              <span class="vault-badge">🔐 ${this.currentVault.username}</span>
+            </div>
+          </header>
+          <main class="vault-content">
+            <div id="trash-list" class="trash-list">
+              ${this.trashItems.length === 0 ? '<div class="empty-state"><p>Trash is empty</p></div>' : 
+                this.trashItems.map(f => `
+                  <div class="trash-item" data-trash-id="${f.id}">
+                    <div class="trash-icon">${this.getFileIcon(f.type)}</div>
+                    <div class="trash-info">
+                      <div class="trash-name">${this.escapeHtml(f.name)}</div>
+                      <div class="trash-meta">Deleted: ${new Date(f.deletedAt).toLocaleString()}</div>
+                    </div>
+                    <div class="trash-actions">
+                      <button class="action-btn trash-restore" data-action="restore" title="Restore">↩️ Restore</button>
+                      <button class="action-btn trash-delete" data-action="delete" title="Delete Permanently">🗑️ Delete</button>
+                    </div>
+                  </div>
+                `).join('')
+              }
+            </div>
+          </main>
+        </div>
+      `;
+    }
+
     async loadVaultData() {
       await this.loadVaultFiles();
       await this.loadVaultFolders();
       await this.loadVaultAlbums();
+      await this.loadTrash();
     }
 
     updateView() {

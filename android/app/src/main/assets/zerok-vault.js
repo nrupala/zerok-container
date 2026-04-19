@@ -17,6 +17,7 @@
   'use strict';
 
   const CONFIG = {
+    DEBUG: false,
     PBKDF2_ITERATIONS: 600000,
     SALT_BYTES: 32,
     NONCE_BYTES: 12,
@@ -26,6 +27,10 @@
     MAX_VAULT_SIZE: 50 * 1024 * 1024 * 1024, // 50GB default, can be changed in settings
     SCHEMA_VERSION: 3
   };
+
+  function debugLog(...args) {
+    if (CONFIG.DEBUG) console.log('[Zerok]', ...args);
+  }
 
   const MIGRATIONS = {
     1: async (db) => {
@@ -55,18 +60,18 @@
     }
 
     async init() {
-      if (this.initialized) return;
-      
-      try {
-        if ('storage' in navigator && 'getDirectory' in navigator.storage) {
-          this.opfsRoot = await navigator.storage.getDirectory();
-          await this.requestPersistence();
-        }
-      } catch (e) {
-        console.warn('OPFS not available, using IndexedDB');
+      if (this.initialized) {
+        debugLog('Storage: Already initialized');
+        return;
       }
       
+      debugLog('Storage: Starting init...');
+      
+      debugLog('Storage: Skipping OPFS, using IndexedDB only...');
+      
+      debugLog('Storage: Initializing IndexedDB...');
       await this.initIndexedDB();
+      debugLog('Storage: IndexedDB ready');
       this.initialized = true;
     }
 
@@ -80,80 +85,169 @@
     }
 
     async initIndexedDB() {
-      return new Promise((resolve, reject) => {
-        const request = indexedDB.open(CONFIG.DB_NAME, CONFIG.SCHEMA_VERSION);
+      debugLog('IDB: Checking IndexedDB support...');
+      
+      if (!window.indexedDB) {
+        throw new Error('IndexedDB not supported by this browser');
+      }
+      
+      debugLog('IDB: Opening database...');
+      
+      const openRequest = indexedDB.open(CONFIG.DB_NAME, CONFIG.SCHEMA_VERSION);
+      
+      openRequest.onerror = () => {
+        debugLog('IDB: Error opening database:', openRequest.error);
+        throw new Error('Cannot open IndexedDB: ' + openRequest.error.message);
+      };
+      
+      openRequest.onupgradeneeded = (e) => {
+        debugLog('IDB: onupgradeneeded fired, version:', e.oldVersion, '->', e.newVersion);
+        const db = e.target.result;
+        debugLog('IDB: Creating schema v' + CONFIG.SCHEMA_VERSION);
         
-        request.onerror = () => reject(request.error);
+        if (!db.objectStoreNames.contains('vaults')) {
+          db.createObjectStore('vaults', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('files')) {
+          const fileStore = db.createObjectStore('files', { keyPath: 'id' });
+          fileStore.createIndex('vaultId', 'vaultId', { unique: false });
+          fileStore.createIndex('folderId', 'folderId', { unique: false });
+          fileStore.createIndex('type', 'type', { unique: false });
+        }
+        if (!db.objectStoreNames.contains('meta')) {
+          db.createObjectStore('meta', { keyPath: 'key' });
+        }
+        if (!db.objectStoreNames.contains('folders')) {
+          db.createObjectStore('folders', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('albums')) {
+          db.createObjectStore('albums', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('trash')) {
+          db.createObjectStore('trash', { keyPath: 'id' });
+        }
+        debugLog('IDB: Schema created');
+      };
+      
+      debugLog('IDB: Awaiting Promise...');
+      
+      try {
+        const db = await Promise.race([
+          new Promise((resolve, reject) => {
+            openRequest.onsuccess = () => {
+              debugLog('IDB: onsuccess fired');
+              resolve(openRequest.result);
+            };
+            openRequest.onerror = () => reject(openRequest.error);
+          }),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('IDB timeout - database blocked')), 5000)
+          )
+        ]);
         
-        request.onupgradeneeded = (e) => {
-          const db = e.target.result;
-          console.log('[Zerok] Creating/upgrading database schema v' + CONFIG.SCHEMA_VERSION);
-          
-          if (!db.objectStoreNames.contains('vaults')) {
-            db.createObjectStore('vaults', { keyPath: 'id' });
-          }
-          if (!db.objectStoreNames.contains('files')) {
-            const fileStore = db.createObjectStore('files', { keyPath: 'id' });
-            fileStore.createIndex('vaultId', 'vaultId', { unique: false });
-            fileStore.createIndex('folderId', 'folderId', { unique: false });
-            fileStore.createIndex('type', 'type', { unique: false });
-          }
-          if (!db.objectStoreNames.contains('meta')) {
-            db.createObjectStore('meta', { keyPath: 'key' });
-          }
-          if (!db.objectStoreNames.contains('folders')) {
-            db.createObjectStore('folders', { keyPath: 'id' });
-          }
-          if (!db.objectStoreNames.contains('albums')) {
-            db.createObjectStore('albums', { keyPath: 'id' });
-          }
-          if (!db.objectStoreNames.contains('trash')) {
-            db.createObjectStore('trash', { keyPath: 'id' });
-          }
-        };
+        debugLog('IDB: Got database reference');
+        this.idb = db;
         
-        request.onsuccess = async () => {
-          this.idb = request.result;
-          
-          try {
-            const tx = this.idb.transaction('meta', 'readonly');
-            const store = tx.objectStore('meta');
-            const versionRequest = store.get('schemaVersion');
+      } catch (e) {
+        debugLog('IDB: Error:', e.message);
+        
+        const confirmed = confirm(
+          '⚠️ VAULT RECOVERY REQUIRED\n\n' +
+          'Your vault database appears to be corrupted or locked.\n\n' +
+          'We will attempt to create a fresh database, but YOUR EXISTING FILES WILL BECOME INACCESSIBLE.\n\n' +
+          'This means:\n' +
+          '• All encrypted files in your vault will be lost\n' +
+          '• Your folder and album structure will be reset\n' +
+          '• You will need to create a new vault\n\n' +
+          'Before proceeding, consider:\n' +
+          '• Closing other tabs that use Zerok\n' +
+          '• Clearing your browser cache\n' +
+          '• Restarting your browser\n\n' +
+          'Click OK to attempt recovery (data loss likely).\n' +
+          'Click Cancel to stop and troubleshoot.'
+        );
+        
+        if (!confirmed) {
+          throw new Error('Database recovery cancelled by user. Try closing other tabs or restarting browser.');
+        }
+        
+        debugLog('IDB: User confirmed recovery, trying fresh database...');
+        
+        const freshDBName = CONFIG.DB_NAME + '-fresh-' + Date.now();
+        debugLog('IDB: New database name:', freshDBName);
+        
+        const freshRequest = indexedDB.open(freshDBName, CONFIG.SCHEMA_VERSION);
+        
+        await new Promise((resolve, reject) => {
+          freshRequest.onupgradeneeded = (e) => {
+            debugLog('IDB: Fresh database - creating schema');
+            const db = e.target.result;
             
-            await new Promise((res, rej) => {
-              versionRequest.onsuccess = () => res(versionRequest.result?.value);
-              versionRequest.onerror = () => res(null);
-            });
-            
-            const savedVersion = await new Promise((res) => {
-              const req = store.get('schemaVersion');
-              req.onsuccess = () => res(req.result?.value);
-              req.onerror = () => res(null);
-            });
-            
-            const currentVersion = savedVersion ? parseInt(savedVersion) : 1;
-            
-            if (currentVersion < CONFIG.SCHEMA_VERSION) {
-              console.log('[Zerok] Migrating from v' + currentVersion + ' to v' + CONFIG.SCHEMA_VERSION);
-              for (let v = currentVersion + 1; v <= CONFIG.SCHEMA_VERSION; v++) {
-                if (MIGRATIONS[v]) {
-                  await MIGRATIONS[v](this.idb);
-                }
-              }
-              
-              const tx2 = this.idb.transaction('meta', 'readwrite');
-              tx2.objectStore('meta').put({ key: 'schemaVersion', value: CONFIG.SCHEMA_VERSION.toString() });
-              await new Promise(r => tx2.oncomplete = r);
-              console.log('[Zerok] Migration complete');
+            if (!db.objectStoreNames.contains('vaults')) {
+              db.createObjectStore('vaults', { keyPath: 'id' });
             }
-          } catch (e) {
-            console.log('[Zerok] Migration check:', e.message);
+            if (!db.objectStoreNames.contains('files')) {
+              const fileStore = db.createObjectStore('files', { keyPath: 'id' });
+              fileStore.createIndex('vaultId', 'vaultId', { unique: false });
+              fileStore.createIndex('folderId', 'folderId', { unique: false });
+              fileStore.createIndex('type', 'type', { unique: false });
+            }
+            if (!db.objectStoreNames.contains('meta')) {
+              db.createObjectStore('meta', { keyPath: 'key' });
+            }
+            if (!db.objectStoreNames.contains('folders')) {
+              db.createObjectStore('folders', { keyPath: 'id' });
+            }
+            if (!db.objectStoreNames.contains('albums')) {
+              db.createObjectStore('albums', { keyPath: 'id' });
+            }
+            if (!db.objectStoreNames.contains('trash')) {
+              db.createObjectStore('trash', { keyPath: 'id' });
+            }
+          };
+          
+          freshRequest.onsuccess = () => {
+            debugLog('IDB: Fresh database opened successfully');
+            this.idb = freshRequest.result;
+            resolve();
+          };
+          freshRequest.onerror = () => reject(freshRequest.error);
+        });
+      }
+      
+      try {
+        debugLog('IDB: Checking schema version...');
+        const tx = this.idb.transaction('meta', 'readonly');
+        const store = tx.objectStore('meta');
+        
+        const savedVersion = await new Promise((res) => {
+          const req = store.get('schemaVersion');
+          req.onsuccess = () => res(req.result?.value);
+          req.onerror = () => res(null);
+        });
+        
+        debugLog('IDB: Saved version:', savedVersion);
+        
+        const currentVersion = savedVersion ? parseInt(savedVersion) : 1;
+        
+        if (currentVersion < CONFIG.SCHEMA_VERSION) {
+          debugLog('IDB: Migrating from v' + currentVersion + ' to v' + CONFIG.SCHEMA_VERSION);
+          for (let v = currentVersion + 1; v <= CONFIG.SCHEMA_VERSION; v++) {
+            if (MIGRATIONS[v]) {
+              await MIGRATIONS[v](this.idb);
+            }
           }
           
-          console.log('[Zerok] Database ready - v' + CONFIG.SCHEMA_VERSION);
-          resolve();
-        };
-      });
+          const tx2 = this.idb.transaction('meta', 'readwrite');
+          tx2.objectStore('meta').put({ key: 'schemaVersion', value: CONFIG.SCHEMA_VERSION.toString() });
+          await new Promise(r => tx2.oncomplete = r);
+          debugLog('IDB: Migration complete');
+        }
+      } catch (e) {
+        debugLog('IDB: Migration check:', e.message);
+      }
+      
+      debugLog('Database ready - v' + CONFIG.SCHEMA_VERSION);
     }
 
     async saveVault(vault) {
@@ -404,7 +498,7 @@
     }
 
     async deriveKey(password, salt) {
-      console.log('[Zerok] deriveKey called, crypto.subtle:', typeof crypto !== 'undefined' ? typeof crypto.subtle : 'no crypto');
+      debugLog('deriveKey called, crypto.subtle:', typeof crypto !== 'undefined' ? typeof crypto.subtle : 'no crypto');
       
       if (!crypto.subtle) {
         throw new Error('Web Crypto API not available. Use HTTPS or localhost.');
@@ -520,11 +614,21 @@
     }
 
     async init() {
-      console.log('[Zerok] Initializing vault...');
-      await this.storage.init();
-      console.log('[Zerok] Storage ready');
-      await this.render();
-      this.bindEvents();
+      debugLog('=== INIT START ===');
+      try {
+        debugLog('Step 1: Initializing storage...');
+        await this.storage.init();
+        debugLog('Step 2: Storage ready');
+        debugLog('Step 3: Calling render()...');
+        await this.render();
+        debugLog('Step 4: Render complete');
+        debugLog('Step 5: Binding events...');
+        this.bindEvents();
+        debugLog('=== INIT COMPLETE ===');
+      } catch (e) {
+        debugLog('INIT ERROR:', e.message, e.stack);
+        document.getElementById('app').innerHTML = '<div class="card"><p class="error">Error: ' + e.message + '</p></div>';
+      }
     }
 
     async restoreSession() {
@@ -540,10 +644,10 @@
               await this.crypto.decrypt(vault.verifier);
               this.currentVault = vault;
               await this.loadVaultData();
-              console.log('[Zerok] Session restored for', vault.username);
+              debugLog('Session restored for', vault.username);
               return true;
             } catch (e) {
-              console.log('[Zerok] Session expired');
+              debugLog('Session expired');
               sessionStorage.removeItem('zerok-password');
             }
           }
@@ -553,24 +657,41 @@
     }
 
     async render() {
+      debugLog('RENDER: Starting...');
       const app = document.getElementById('app');
-      if (!app) return;
-
-      const restored = await this.restoreSession();
-      if (restored && this.currentVault) {
-        app.innerHTML = this.renderVault();
-        this.bindEvents();
+      if (!app) {
+        debugLog('RENDER: No #app found!');
         return;
       }
 
+      debugLog('RENDER: Attempting session restore...');
+      const restored = await this.restoreSession();
+      debugLog('RENDER: Session restore result:', restored, this.currentVault ? this.currentVault.username : 'none');
+      
+      if (restored && this.currentVault) {
+        debugLog('RENDER: Rendering vault view...');
+        app.innerHTML = this.renderVault();
+        debugLog('RENDER: Vault view rendered, binding events...');
+        this.bindEvents();
+        debugLog('RENDER: Done (session restored)');
+        return;
+      }
+
+      debugLog('RENDER: No session, listing vaults...');
       const vaults = await this.storage.listVaults();
+      debugLog('RENDER: Found vaults:', vaults.length);
       
       if (!vaults.length) {
+        debugLog('RENDER: Showing welcome screen');
         app.innerHTML = this.renderWelcome();
       } else {
+        debugLog('RENDER: Showing login screen');
         app.innerHTML = this.renderLogin();
+        debugLog('RENDER: Populating vault select...');
         await this.populateVaultSelect(vaults);
+        debugLog('RENDER: Vault select populated');
       }
+      debugLog('RENDER: Done');
     }
 
     async populateVaultSelect(vaults) {
@@ -638,6 +759,9 @@
           <button id="unlock-vault" class="btn-primary">Unlock</button>
           <button id="delete-vault" class="btn-danger">Delete Vault</button>
           <button id="new-vault" class="btn-secondary">Create New Vault</button>
+          <div class="backup-section">
+            <button id="restore-backup-login" class="btn-secondary">📥 Restore from Backup</button>
+          </div>
           <p class="error" id="error"></p>
         </section>
       `;
@@ -723,6 +847,22 @@
                   <div class="storage-bar">
                     <div class="storage-fill" style="width: ${storageInfo.percent}%"></div>
                   </div>
+                </div>
+              </div>
+              
+              <div class="sidebar-section">
+                <h3>💾 Backup</h3>
+                <button class="sidebar-btn" id="backup-vault">📦 Backup Now</button>
+                <button class="sidebar-btn" id="restore-backup">📥 Restore</button>
+                <div class="backup-settings">
+                  <label class="backup-toggle">
+                    <input type="checkbox" id="auto-backup-add" ${this.currentVault.settings?.autoBackupOnAdd ? 'checked' : ''}>
+                    <span>Auto-backup on file add</span>
+                  </label>
+                  <label class="backup-toggle">
+                    <input type="checkbox" id="auto-backup-lock" ${this.currentVault.settings?.autoBackupOnLock !== false ? 'checked' : ''}>
+                    <span>Auto-backup on lock</span>
+                  </label>
                 </div>
               </div>
               
@@ -1381,18 +1521,18 @@
     }
 
     bindEvents() {
-      console.log('[Zerok] Binding events...');
+      debugLog('Binding events...');
       
       document.addEventListener('click', async (e) => {
         const target = e.target;
-        console.log('[Zerok] Click:', target.id || target.className);
+        debugLog('Click:', target.id || target.className);
         
         if (target.id === 'create-vault') {
-          console.log('[Zerok] Create vault clicked');
+          debugLog('Create vault clicked');
           await this.createVault();
         }
         if (target.id === 'unlock-vault') {
-          console.log('[Zerok] Unlock vault clicked');
+          debugLog('Unlock vault clicked');
           await this.unlockVault();
         }
         if (target.id === 'lock-vault') {
@@ -1405,6 +1545,9 @@
           const app = document.getElementById('app');
           app.innerHTML = this.renderWelcome();
           this.bindEvents();
+        }
+        if (target.id === 'restore-backup-login') {
+          await this.restoreBackup();
         }
         
         if (target.id === 'new-folder' || target.id === 'create-folder-btn') {
@@ -1421,6 +1564,12 @@
         }
         if (target.id === 'empty-trash') {
           await this.emptyTrash();
+        }
+        if (target.id === 'backup-vault') {
+          await this.backupVault();
+        }
+        if (target.id === 'restore-backup') {
+          await this.restoreBackup();
         }
         
         if (target.classList.contains('trash-restore')) {
@@ -1485,6 +1634,18 @@
         if (e.target.id === 'vault-select') {
           await this.loadVaultFiles();
         }
+        if (e.target.id === 'auto-backup-add') {
+          this.currentVault.settings = this.currentVault.settings || {};
+          this.currentVault.settings.autoBackupOnAdd = e.target.checked;
+          await this.storage.saveVault(this.currentVault);
+          this.showToast(e.target.checked ? 'Auto-backup on file add enabled' : 'Auto-backup on file add disabled', 'info');
+        }
+        if (e.target.id === 'auto-backup-lock') {
+          this.currentVault.settings = this.currentVault.settings || {};
+          this.currentVault.settings.autoBackupOnLock = e.target.checked;
+          await this.storage.saveVault(this.currentVault);
+          this.showToast(e.target.checked ? 'Auto-backup on lock enabled' : 'Auto-backup on lock disabled', 'info');
+        }
       });
 
       document.addEventListener('input', async (e) => {
@@ -1547,7 +1708,11 @@
         username,
         salt: this.crypto.bufferToBase64(salt),
         verifier: await this.crypto.encrypt('ZEROK_CANARY'),
-        created: Date.now()
+        created: Date.now(),
+        settings: {
+          autoBackupOnAdd: false,
+          autoBackupOnLock: true
+        }
       };
 
       await this.storage.saveVault(vault);
@@ -1632,6 +1797,11 @@
     }
 
     async lockVault() {
+      if (this.currentVault?.settings?.autoBackupOnLock) {
+        this.showToast('Auto-backing up before lock...', 'info');
+        await this.backupVault();
+      }
+      
       this.crypto.key = null;
       this.currentVault = null;
       this.files = [];
@@ -1699,6 +1869,189 @@
       await this.storage.saveFile(fileRecord);
       await this.loadVaultFiles();
       this.updateView();
+      
+      if (this.currentVault.settings?.autoBackupOnAdd) {
+        this.showToast('Auto-backing up...', 'info');
+        await this.backupVault();
+      }
+    }
+
+    async backupVault() {
+      if (!this.currentVault) return;
+      
+      this.showToast('Creating backup...', 'info');
+      
+      const files = await this.storage.listFiles(this.currentVault.id);
+      const folders = await this.storage.listFolders(this.currentVault.id);
+      const albums = await this.storage.listAlbums(this.currentVault.id);
+      
+      const backup = {
+        version: 1,
+        type: 'zerok-backup',
+        timestamp: Date.now(),
+        vault: {
+          id: this.currentVault.id,
+          username: this.currentVault.username,
+          salt: this.currentVault.salt,
+          verifier: this.currentVault.verifier,
+          created: this.currentVault.created,
+          settings: this.currentVault.settings
+        },
+        stats: {
+          fileCount: files.length,
+          folderCount: folders.length,
+          albumCount: albums.length,
+          totalSize: files.reduce((sum, f) => sum + (f.size || 0), 0)
+        },
+        data: {
+          files: files,
+          folders: folders,
+          albums: albums
+        }
+      };
+      
+      const jsonStr = JSON.stringify(backup);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = url;
+      const date = new Date().toISOString().slice(0, 10);
+      a.download = `zerok-backup-${this.currentVault.username}-${date}.zerokbackup`;
+      a.click();
+      
+      URL.revokeObjectURL(url);
+      this.showToast('Backup saved: ' + a.download, 'success');
+    }
+
+    async restoreBackup() {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.zerokbackup,.json';
+      
+      input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        try {
+          const text = await file.text();
+          const backup = JSON.parse(text);
+          
+          if (!backup.type || backup.type !== 'zerok-backup') {
+            alert('Invalid backup file format');
+            return;
+          }
+          
+          if (!this.currentVault) {
+            const createNew = confirm(
+              '🆕 CREATE NEW VAULT FROM BACKUP\n\n' +
+              'Backup contains: ' + backup.vault.username + '\n' +
+              'Files: ' + backup.stats.fileCount + '\n' +
+              'Folders: ' + backup.stats.folderCount + '\n' +
+              'Albums: ' + backup.stats.albumCount + '\n\n' +
+              'A new vault will be created with this data.\n\n' +
+              'Note: You will need to create a new password since we cannot recover the original.\n\n' +
+              'Click OK to continue, Cancel to abort.'
+            );
+            
+            if (!createNew) return;
+            
+            const newUsername = prompt('Enter a username for the new vault:', backup.vault.username + '-restored');
+            if (!newUsername) return;
+            
+            const newPassword = prompt('Set a new master password (min 12 chars):');
+            if (!newPassword || newPassword.length < 12) {
+              alert('Password must be at least 12 characters');
+              return;
+            }
+            
+            this.showToast('Creating vault from backup...', 'info');
+            
+            const salt = this.crypto.generateSalt();
+            this.crypto.key = await this.crypto.deriveKey(newPassword, salt);
+            
+            const newVault = {
+              id: crypto.randomUUID(),
+              username: newUsername,
+              salt: this.crypto.bufferToBase64(salt),
+              verifier: await this.crypto.encrypt('ZEROK_CANARY'),
+              created: Date.now(),
+              settings: backup.vault.settings || { autoBackupOnAdd: false, autoBackupOnLock: true }
+            };
+            
+            await this.storage.saveVault(newVault);
+            await this.storage.saveMeta('current-vault', newVault.id);
+            sessionStorage.setItem('zerok-password', newPassword);
+            
+            this.currentVault = newVault;
+            
+            for (const folder of backup.data.folders) {
+              folder.vaultId = newVault.id;
+              folder.id = crypto.randomUUID();
+              await this.storage.saveFolder(folder);
+            }
+            
+            for (const album of backup.data.albums) {
+              album.vaultId = newVault.id;
+              album.id = crypto.randomUUID();
+              await this.storage.saveAlbum(album);
+            }
+            
+            for (const f of backup.data.files) {
+              f.vaultId = newVault.id;
+              f.id = crypto.randomUUID();
+              await this.storage.saveFile(f);
+            }
+            
+            await this.loadVaultData();
+            this.showVault();
+            this.showToast('Restored ' + backup.stats.fileCount + ' files from backup', 'success');
+            
+          } else {
+            const confirmMsg = 
+              '⚠️ RESTORE BACKUP\n\n' +
+              'This will import backup from: ' + backup.vault.username + '\n' +
+              'Files: ' + backup.stats.fileCount + '\n' +
+              'Folders: ' + backup.stats.folderCount + '\n' +
+              'Albums: ' + backup.stats.albumCount + '\n\n' +
+              'IMPORTANT: Your current vault data will be MERGED with backup data.\n' +
+              '• New files from backup will be added\n' +
+              '• Existing files will be kept\n' +
+              '• Folders and albums will be merged\n\n' +
+              'Do you want to continue?';
+            
+            if (!confirm(confirmMsg)) return;
+            
+            this.showToast('Restoring backup...', 'info');
+            
+            const vaultId = this.currentVault.id;
+            
+            for (const folder of backup.data.folders) {
+              folder.vaultId = vaultId;
+              await this.storage.saveFolder(folder);
+            }
+            
+            for (const album of backup.data.albums) {
+              album.vaultId = vaultId;
+              await this.storage.saveAlbum(album);
+            }
+            
+            for (const f of backup.data.files) {
+              f.vaultId = vaultId;
+              await this.storage.saveFile(f);
+            }
+            
+            await this.loadVaultData();
+            this.showVault();
+            this.showToast('Backup restored: ' + backup.stats.fileCount + ' files imported', 'success');
+          }
+          
+        } catch (err) {
+          alert('Failed to restore backup: ' + err.message);
+        }
+      };
+      
+      input.click();
     }
 
     showToast(message, type = 'info') {
@@ -1790,10 +2143,16 @@
     }
 
     async loadVaultData() {
+      debugLog('LOAD: Starting loadVaultData...');
+      debugLog('LOAD: currentVault:', this.currentVault?.id);
       await this.loadVaultFiles();
+      debugLog('LOAD: Files loaded:', this.files.length);
       await this.loadVaultFolders();
+      debugLog('LOAD: Folders loaded:', this.folders.length);
       await this.loadVaultAlbums();
+      debugLog('LOAD: Albums loaded:', this.albums.length);
       await this.loadTrash();
+      debugLog('LOAD: Trash loaded:', this.trashItems.length);
     }
 
     updateView() {
@@ -1823,23 +2182,23 @@
 
   const app = new VaultApp();
 
-  console.log('[Zerok] App instance created');
+  debugLog('App instance created');
   
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() {
-      console.log('[Zerok] DOM ready, calling init');
+      debugLog('DOM ready, calling init');
       app.init().then(function() {
-        console.log('[Zerok] Init complete');
+        debugLog('Init complete');
       }).catch(function(e) {
-        console.log('[Zerok] Init error:', e);
+        debugLog('Init error:', e);
       });
     });
   } else {
-    console.log('[Zerok] DOM already ready, calling init');
+    debugLog('DOM already ready, calling init');
     app.init().then(function() {
-      console.log('[Zerok] Init complete');
+      debugLog('Init complete');
     }).catch(function(e) {
-      console.log('[Zerok] Init error:', e);
+      debugLog('Init error:', e);
     });
   }
 

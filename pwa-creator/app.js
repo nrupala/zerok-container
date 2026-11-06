@@ -133,7 +133,11 @@ fileIn.addEventListener('change', async () => {
 async function process(file) {
   const id = await vault.addFile(file);
   const li = document.createElement('li');
-  li.innerHTML = `<span>${file.name}</span><small>${format(file.size)} • ${id.slice(0, 8)}...</small>`;
+  const name = document.createElement('span');
+  name.textContent = file.name;
+  const meta = document.createElement('small');
+  meta.textContent = `${format(file.size)} • ${id.slice(0, 8)}...`;
+  li.append(name, meta);
   list.appendChild(li);
 }
 

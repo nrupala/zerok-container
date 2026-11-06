@@ -23,7 +23,17 @@ jobs:
           java-version: 17
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        # android-actions/setup-android@v3 failed at this step in the sampled
+        # runs (run 38348434557, job 115135113003: "Set up Android SDK"
+        # failure, all downstream steps skipped; the build-pwa job in the
+        # same runs succeeded). The ubuntu-latest runner image ships the
+        # Android SDK preinstalled; use it directly and install the platform
+        # and build-tools this app targets (compileSdk 34).
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME/platforms"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Read version
         id: version
@@ -46,7 +56,15 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradle-8.2/bin/gradle
-          gradle-8.2/bin/gradle assembleDebug --no-daemon
+          set +e
+          gradle-8.2/bin/gradle assembleDebug --no-daemon --stacktrace > gradle-build.log 2>&1
+          code=$?
+          if [ $code -ne 0 ]; then
+            # Loud failure: surface the Gradle tail as a check annotation so
+            # the failure reason is readable from the run, not buried in logs.
+            python3 -c "import pathlib; t=pathlib.Path('gradle-build.log').read_text(errors='replace'); i=t.find('* What went wrong:'); t=(t[i:i+3200] if i>=0 else t[-3200:]); print('::error::'+t.replace('%','%25').replace(chr(13),'%0D').replace(chr(10),'%0A'))"
+          fi
+          exit $code
 
       - name: Set APK version
         if: success()

@@ -1,9 +1,20 @@
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import os
 import json
+import re
 
 DATA_DIR = "data"
 os.makedirs(DATA_DIR, exist_ok=True)
+
+# Blob ids are BLAKE3 hex digests minted by zerok.blob.blob_id() - exactly 64
+# lowercase hex characters, no separators. Anything else is not a blob id and
+# must never reach a filesystem path.
+_BLOB_ID = re.compile(r"[0-9a-f]{64}")
+
+def _blob_path(blob_id):
+    if not _BLOB_ID.fullmatch(blob_id):
+        return None
+    return os.path.join(DATA_DIR, blob_id)
 
 class ZerokHandler(BaseHTTPRequestHandler):
     def _send_cors(self):
@@ -24,7 +35,10 @@ class ZerokHandler(BaseHTTPRequestHandler):
             return
         size = int(self.headers.get("Content-Length", 0))
         data = self.rfile.read(size)
-        path = os.path.join(DATA_DIR, blob_id)
+        path = _blob_path(blob_id)
+        if path is None:
+            self.send_error(400, "Invalid blob_id")
+            return
         with open(path, "wb") as f:
             f.write(data)
         self.send_response(204)
@@ -45,7 +59,10 @@ class ZerokHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(files).encode())
             return
-        path = os.path.join(DATA_DIR, blob_id)
+        path = _blob_path(blob_id)
+        if path is None:
+            self.send_error(400, "Invalid blob_id")
+            return
         if not os.path.exists(path):
             self.send_error(404, "Not found")
             return
@@ -63,7 +80,10 @@ class ZerokHandler(BaseHTTPRequestHandler):
         if not blob_id:
             self.send_error(400, "Missing blob_id")
             return
-        path = os.path.join(DATA_DIR, blob_id)
+        path = _blob_path(blob_id)
+        if path is None:
+            self.send_error(400, "Invalid blob_id")
+            return
         if not os.path.exists(path):
             self.send_error(404, "Not found")
             return

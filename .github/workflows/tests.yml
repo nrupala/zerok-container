@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: pip install pytest cryptography blake3 argon2-cffi requests
 
-      - name: Run tests
+      - name: Run test suite
         run: |
           set +e
           python -m pytest tests/ -q > pytest.log 2>&1

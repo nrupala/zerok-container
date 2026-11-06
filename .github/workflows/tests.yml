@@ -1,0 +1,35 @@
+name: Tests
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install pytest cryptography blake3 argon2-cffi requests
+
+      - name: Run tests
+        run: |
+          set +e
+          python -m pytest tests/ -q > pytest.log 2>&1
+          code=$?
+          if [ $code -ne 0 ]; then
+            # Loud failure: surface the pytest tail as a check annotation.
+            python3 -c "import pathlib; t=pathlib.Path('pytest.log').read_text(errors='replace')[-3200:]; print('::error::'+t.replace('%','%25').replace(chr(13),'%0D').replace(chr(10),'%0A'))"
+          fi
+          cat pytest.log
+          exit $code
